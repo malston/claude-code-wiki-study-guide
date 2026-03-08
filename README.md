@@ -82,6 +82,16 @@ Every card is tagged with `section::topic` for filtered review. Examples:
 
 Use Anki's **Custom Study > Limit to certain tags** to drill a specific topic before a workshop on that subject.
 
+## Syncing Card Edits from Anki
+
+If you edit a card in Anki and want to sync it back to the deck file:
+
+```bash
+./sync-card <note_id>
+```
+
+Requires [AnkiConnect](https://ankiweb.net/shared/info/2055492159) running on `localhost:8765`. Supports Short/Long Answer, Basic, and Cloze models. The script determines the target file from the card's first tag prefix (e.g., `internals::prompt-caching` writes to `decks/internals.txt`).
+
 ## Regenerating Cards
 
 These cards were generated from the wiki content by Claude Code using parallel agents (one per section). To regenerate after wiki updates, see the design doc in the wiki repo at `docs/plans/2026-03-05-anki-deck-design.md`.
