@@ -14,23 +14,24 @@ brew install --cask anki
 2. Go to **File > Import**
 3. Select a `.txt` file from `decks/`
 4. Set the field separator to **Tab**
-5. Map the fields: Field 1 = Front, Field 2 = Back, Field 3 = Tags
-6. Set the deck name using the `Claude Code Wiki::` prefix (e.g., `Claude Code Wiki::Internals`)
-7. Click **Import**
-8. Repeat for each file
+5. Map the fields: Field 1 = Front, Field 2 = Short, Field 3 = Long, Field 4 = Tags
+6. Set the note type to **Short/Long Answer** (create it first if it doesn't exist -- see Card Types below)
+7. Set the deck name using the `Claude Code Wiki::` prefix (e.g., `Claude Code Wiki::Internals`)
+8. Click **Import**
+9. Repeat for each file
 
 ## Decks
 
 | File                     | Cards | Focus                                                       |
 | ------------------------ | ----- | ----------------------------------------------------------- |
 | `internals.txt`          | 78    | Numbers, thresholds, pricing, mechanics -- the foundation   |
-| `guides.txt`             | 83    | Workflow scenarios, config completion, practical how-to     |
+| `guides.txt`             | 93    | Workflow scenarios, config completion, practical how-to     |
 | `extending.txt`          | 68    | Hooks, MCP, agent teams -- config-heavy                     |
 | `enterprise-rollout.txt` | 107   | Client scenarios, architecture decisions, pushback handling |
 | `product.txt`            | 49    | Teach-back prompts for PM workflows and frameworks          |
 | `training-paths.txt`     | 32    | Curriculum design rationale and structure                   |
 
-**417 cards total.**
+**427 cards total.**
 
 ## Card Types
 
