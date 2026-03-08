@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Syncs an Anki card back into its deck .txt file.
+# Usage: ./sync-card <note_id>
+
+DECKS_DIR="$(cd "$(dirname "$0")/decks" && pwd)"
+ANKI_URL="http://localhost:8765"
+
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $(basename "$0") <note_id>" >&2
+  exit 1
+fi
+
+note_id="$1"
+
+# Fetch card from AnkiConnect
+response=$(curl -sf "$ANKI_URL" -X POST -d "{
+  \"action\": \"notesInfo\",
+  \"version\": 6,
+  \"params\": {\"notes\": [$note_id]}
+}")
+
+# Validate response
+error=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error') or '')")
+if [[ -n "$error" ]]; then
+  echo "AnkiConnect error: $error" >&2
+  exit 1
+fi
+
+count=$(echo "$response" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['result']))")
+if [[ "$count" -eq 0 ]]; then
+  echo "Note $note_id not found in Anki" >&2
+  exit 1
+fi
+
+# Extract fields and build the replacement line
+new_line=$(echo "$response" | python3 -c "
+import sys, json, re, html
+
+data = json.load(sys.stdin)['result'][0]
+fields = data['fields']
+tags = ' '.join(data['tags'])
+model = data['modelName']
+
+def strip_html(s):
+    # Convert div boundaries to <br>
+    s = re.sub(r'</div>\s*<div>', '<br>', s)
+    # Strip remaining div tags
+    s = re.sub(r'</?div>', '', s)
+    # Convert em/strong/b/i to plain text
+    s = re.sub(r'</?(?:em|strong|b|i)>', '', s)
+    # Keep <br> tags, strip everything else
+    s = re.sub(r'<(?!br\s*/?>)[^>]+>', '', s)
+    # Decode HTML entities
+    s = html.unescape(s)
+    # Normalize whitespace (but preserve intentional line structure)
+    s = re.sub(r'[ \t]+', ' ', s).strip()
+    # Replace unicode dashes with --
+    s = s.replace('\u2014', '--').replace('\u2013', '--')
+    return s
+
+if model == 'Short/Long Answer':
+    front = strip_html(fields['Front']['value'])
+    short = strip_html(fields['Short']['value'])
+    long = strip_html(fields['Long']['value'])
+    print(f'{front}\t{short}\t{long}\t{tags}')
+elif model in ('Basic', 'Basic (and reversed card)', 'Basic (optional reversed card)', 'Basic (type in the answer)'):
+    front = strip_html(fields['Front']['value'])
+    back = strip_html(fields['Back']['value'])
+    print(f'{front}\t{back}\t\t{tags}')
+elif model == 'Cloze':
+    text = strip_html(fields['Text']['value'])
+    extra = strip_html(fields.get('Back Extra', {}).get('value', ''))
+    print(f'{text}\t{extra}\t\t{tags}')
+else:
+    print(f'Unsupported model: {model}', file=sys.stderr)
+    sys.exit(1)
+")
+
+# Determine which deck file from the first tag prefix (e.g., internals::foo -> internals.txt)
+deck_file=$(echo "$response" | python3 -c "
+import sys, json
+tags = json.load(sys.stdin)['result'][0]['tags']
+if not tags:
+    print('', end='')
+else:
+    prefix = tags[0].split('::')[0]
+    print(prefix, end='')
+")
+
+if [[ -z "$deck_file" ]]; then
+  echo "Card has no tags -- cannot determine deck file" >&2
+  exit 1
+fi
+
+deck_path="$DECKS_DIR/${deck_file}.txt"
+if [[ ! -f "$deck_path" ]]; then
+  echo "Deck file not found: $deck_path" >&2
+  exit 1
+fi
+
+# Extract the first field (front/text) to find the matching line
+front=$(echo "$new_line" | cut -f1)
+
+# Find and replace the matching line
+if ! grep -qF "$front" "$deck_path"; then
+  echo "No matching line found for front text in $deck_path" >&2
+  echo "Front: $front" >&2
+  exit 1
+fi
+
+match_count=$(grep -cF "$front" "$deck_path")
+if [[ "$match_count" -gt 1 ]]; then
+  echo "Multiple matches ($match_count) for front text in $deck_path -- aborting" >&2
+  exit 1
+fi
+
+# Build a temp file with the replacement
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+
+while IFS= read -r line; do
+  if echo "$line" | grep -qF "$front"; then
+    echo "$new_line"
+  else
+    echo "$line"
+  fi
+done < "$deck_path" > "$tmp"
+
+mv "$tmp" "$deck_path"
+echo "Updated $(basename "$deck_path") line matching: $(echo "$front" | head -c 80)..."
